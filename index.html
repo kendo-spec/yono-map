@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <!-- アプリっぽく見せる設定（ズーム抑制・全画面・セーフエリア対応） -->
+    <!-- アプリ設定 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#F8355C">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -10,13 +10,12 @@
     <meta name="format-detection" content="telephone=no">
     <title>与野支え合いマップ</title>
     
-    <!-- PWA用マニフェスト読み込み -->
+    <!-- PWA用マニフェスト -->
     <link rel="manifest" href="./manifest.json">
 
-    <!-- ★★★ ファビコン・アプリアイコン設定 ★★★ -->
-    <!-- Googleドライブの画像を使う場合は https://drive.google.com/uc?export=view&id=ファイルID の形式にしてください -->
-    <link rel="icon" href="https://drive.google.com/uc?export=view&id=1dOwnwlzrpLgfv_ytjGl3Z-ignWRjdXYC">
-    <link rel="apple-touch-icon" href="https://placehold.co/192x192/F8355C/ffffff/png?text=YONO">
+    <!-- ★★★ ファビコン・アプリアイコン設定 (Imgur画像) ★★★ -->
+    <link rel="icon" href="https://i.imgur.com/Q28hkNa.png">
+    <link rel="apple-touch-icon" href="https://i.imgur.com/Q28hkNa.png">
     
     <!-- Google Analytics 4 -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-SJ46G7DPJG"></script>
@@ -27,7 +26,7 @@
       gtag('config', 'G-SJ46G7DPJG', { 'cookie_flags': 'max-age=7200;secure;samesite=none' });
     </script>
 
-    <!-- ライブラリ群 -->
+    <!-- ライブラリ -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -39,7 +38,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <script>
-        // PWA Service Worker登録
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW Error:', e));
         }
@@ -68,14 +66,12 @@
     </script>
     
     <style>
-        /* iOSセーフエリア対応 */
         body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background-color: #f9fafb; }
         #root { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; font-family: "Helvetica Neue", Arial, sans-serif; }
         .main-content { flex-grow: 1; overflow-y: auto; padding-bottom: 80px; display: flex; flex-direction: column; -webkit-overflow-scrolling: touch; }
         .footer-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; z-index: 1000; background-color: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); padding-bottom: env(safe-area-inset-bottom); }
         .leaflet-container { height: 100%; width: 100%; z-index: 1; background: #f3f4f6; }
         .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-        .confetti-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10000; }
         .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
         .leaflet-popup-content { margin: 0; width: 240px !important; }
         .leaflet-popup-tip { background: white; }
@@ -83,7 +79,6 @@
         .custom-popup-body { padding: 12px; text-align: center; }
         img { transition: opacity 0.3s; }
         
-        /* Map Buttons */
         .map-calendar-btn { position: absolute; top: 12px; right: 12px; z-index: 1000; background-color: white; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); color: #F8355C; font-size: 20px; cursor: pointer; border: 2px solid #F8355C; }
         .map-current-loc-btn { position: absolute; top: 68px; right: 12px; z-index: 1000; background-color: white; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); color: #3b82f6; font-size: 20px; cursor: pointer; border: 2px solid #3b82f6; }
         .view-toggle-container { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: white; border-radius: 9999px; padding: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; gap: 4px; }
@@ -110,7 +105,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // ★ユーザー指定のGAS API URL
+        // ★ GASのAPI URL (設定済み)
         const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyE81D55A-VSCR8r-73bZ7Zd3t05fNcapbgG6_SofZ6h1M54OX3hlNYNLpNtXlL2f3m/exec";
 
         const { useState, useEffect, useCallback, useMemo, useRef } = React;
@@ -141,8 +136,7 @@
             });
         };
 
-        // --- PWA用の通信関数 (fetchを使用) ---
-        // 以前のgoogle.script.runを置き換え
+        // GAS通信関数 (fetch)
         const runGAS = async (functionName, args = {}) => {
             const params = new URLSearchParams({ action: functionName, ...args });
             try {
@@ -151,7 +145,6 @@
                 return json;
             } catch (e) {
                 console.error("API Error:", e);
-                // エラー時のダミーデータ
                 return { 
                     communalPlaces: [], dayService: [], news: [], 
                     about: {'タイトル':'読込エラー', '総アクセス数':0}, 
@@ -178,7 +171,7 @@
             );
         };
 
-        // --- PWAインストール誘導バナー ---
+        // PWAインストール誘導バナー
         const InstallBanner = ({ onClose }) => {
             const [show, setShow] = useState(false);
             useEffect(() => {
@@ -262,8 +255,7 @@
             const [showManual, setShowManual] = useState(false);
             useEffect(() => {
                 if (qrCodeRef.current && about['共有']) {
-                    if(about['共有'].match(/\.(jpeg|jpg|gif|png)$/) != null || about['共有'].includes('imgur')){ qrCodeRef.current.innerHTML = `<img src="${formatImageUrl(about['共有'])}" class="w-full h-full object-contain" referrerPolicy="no-referrer" />`; } 
-                    else { try { qrCodeRef.current.innerHTML = ''; new QRCode(qrCodeRef.current, { text: about['共有'], width: 120, height: 120, correctLevel: QRCode.CorrectLevel.L }); } catch(e) {} }
+                    try { qrCodeRef.current.innerHTML = ''; new QRCode(qrCodeRef.current, { text: about['共有'], width: 120, height: 120, correctLevel: QRCode.CorrectLevel.L }); } catch(e) {}
                 }
                 sendGAEvent('view_about', {});
             }, [about]);
@@ -516,9 +508,9 @@
                             localStorage.setItem('yono_map_user_id', userId);
                             setShowWelcome(true);
                         }
+                        runGAS('incrementAccessCount');
                         const result = await runGAS('getAllData', { userId });
                         setData(result);
-                        runGAS('incrementAccessCount');
                     } catch (error) {
                         console.error(error);
                         setData({ communalPlaces: [], dayService: [], news: [], about: {'総アクセス数':0}, userData: {}, masterData: [], questionMaster: [], collection: [] });
