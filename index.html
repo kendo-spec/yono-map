@@ -2,16 +2,18 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <!-- アプリっぽく見せる設定 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#F8355C">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>与野支え合いマップ</title>
     
-    <!-- PWA用設定 -->
+    <!-- PWA用アイコン設定 -->
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="https://placehold.co/192x192/F8355C/ffffff/png?text=YONO">
-    <meta name="apple-mobile-web-app-capable" content="yes">
     
-    <!-- Google Analytics -->
+    <!-- Google Analytics 4 -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-SJ46G7DPJG"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -20,6 +22,7 @@
       gtag('config', 'G-SJ46G7DPJG', { 'cookie_flags': 'max-age=7200;secure;samesite=none' });
     </script>
 
+    <!-- ライブラリ群 -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -33,206 +36,713 @@
     <script>
         // PWA Service Worker登録
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
+            navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW Error:', e));
         }
-        
-        tailwind.config = { theme: { extend: { colors: { rose: { 500: '#F8355C', 600: '#D61C44' }, sky: { 100: '#E0F2FE' }, grass: { 100: '#DCFCE7' } }, animation: { 'float': 'float 3s ease-in-out infinite' }, keyframes: { float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } } } } } }
+
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        rose: { 500: '#F8355C', 600: '#D61C44' },
+                        sky: { 100: '#E0F2FE', 200: '#BAE6FD' },
+                        grass: { 100: '#DCFCE7', 200: '#BBF7D0' }
+                    },
+                    animation: {
+                        'float': 'float 3s ease-in-out infinite',
+                        'pulse-once': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) 2'
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
     </script>
+    
     <style>
-        body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: #f9fafb; }
+        /* iOSセーフエリア対応 */
+        body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background-color: #f9fafb; }
         #root { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; font-family: "Helvetica Neue", Arial, sans-serif; }
         .main-content { flex-grow: 1; overflow-y: auto; padding-bottom: 80px; display: flex; flex-direction: column; -webkit-overflow-scrolling: touch; }
         .footer-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; z-index: 1000; background-color: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); padding-bottom: env(safe-area-inset-bottom); }
-        .leaflet-container { height: 100%; width: 100%; z-index: 1; }
+        .leaflet-container { height: 100%; width: 100%; z-index: 1; background: #f3f4f6; }
         .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-        .garden-bg { background: linear-gradient(180deg, #E0F2FE 0%, #FFFFFF 60%, #DCFCE7 100%); }
-        .sunshine { position: absolute; width: 300px; height: 300px; background: radial-gradient(circle, rgba(255,255,200,0.6) 0%, rgba(255,255,255,0) 70%); top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 0; pointer-events: none; }
+        .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
+        .leaflet-popup-content { margin: 0; width: 240px !important; }
+        .custom-popup-header { background: linear-gradient(135deg, #F8355C 0%, #fb7185 100%); color: white; padding: 8px 12px; font-weight: bold; font-size: 0.9rem; }
+        .custom-popup-body { padding: 12px; text-align: center; }
+        
+        /* Map Buttons */
+        .map-calendar-btn { position: absolute; top: 12px; right: 12px; z-index: 1000; background-color: white; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); color: #F8355C; font-size: 20px; cursor: pointer; border: 2px solid #F8355C; }
+        .map-current-loc-btn { position: absolute; top: 68px; right: 12px; z-index: 1000; background-color: white; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); color: #3b82f6; font-size: 20px; cursor: pointer; border: 2px solid #3b82f6; }
+        .view-toggle-container { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: white; border-radius: 9999px; padding: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; gap: 4px; }
+        
+        .search-container { padding: 10px 16px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); z-index: 10; width: 100%; box-sizing: border-box; }
+        .search-wrapper { display: flex; gap: 8px; width: 100%; height: 44px; }
+        .search-input-container { position: relative; flex: 1; height: 100%; }
+        .search-input { width: 100%; height: 100%; padding-left: 36px; padding-right: 12px; background-color: #f3f4f6; border-radius: 8px; border: none; font-size: 14px; outline: none; box-sizing: border-box; }
+        .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; }
+        .search-select { height: 100%; padding-left: 12px; padding-right: 32px; background-color: #f3f4f6; border-radius: 8px; border: none; font-size: 14px; font-weight: bold; color: #374151; outline: none; appearance: none; background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='gray' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 8px center; background-size: 16px; box-sizing: border-box; }
+
         .text-size-large { font-size: 1.2rem !important; }
         .text-size-large .text-xs { font-size: 0.9rem !important; }
         .text-size-large .text-sm { font-size: 1.05rem !important; }
         .text-size-large .text-xl { font-size: 1.6rem !important; }
         .text-size-large .text-2xl { font-size: 1.8rem !important; }
+        
+        .garden-bg { background: linear-gradient(180deg, #E0F2FE 0%, #FFFFFF 60%, #DCFCE7 100%); }
+        .sunshine { position: absolute; width: 300px; height: 300px; background: radial-gradient(circle, rgba(255,255,200,0.6) 0%, rgba(255,255,255,0) 70%); top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 0; pointer-events: none; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // ★重要：ここにGASのウェブアプリURLを貼り付けてください
+        // ★★★重要：ここにGASの新しいURL（個人アカウント版）を貼り付けてください★★★
         const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyE81D55A-VSCR8r-73bZ7Zd3t05fNcapbgG6_SofZ6h1M54OX3hlNYNLpNtXlL2f3m/exec";
 
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
-        // --- API通信用関数 (fetchを使用) ---
+        const sendGAEvent = (eventName, params) => {
+            if (typeof window.gtag === 'function') window.gtag('event', eventName, params);
+        };
+
+        const formatImageUrl = (url) => {
+            if (!url) return null;
+            if (url.includes('drive.google.com')) {
+                const idMatch = url.match(/\/d\/([-_\w]+)/) || url.match(/id=([-_\w]+)/);
+                if (idMatch && idMatch[1]) return `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
+            }
+            return url;
+        };
+
+        const renderClickableText = (text) => {
+            if (!text) return '';
+            const str = String(text);
+            const phoneRegex = /(\d{2,4}-\d{2,4}-\d{3,4}|\d{10,11})/g;
+            const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/g;
+            const parts = str.split(/(\d{2,4}-\d{2,4}-\d{3,4}|\d{10,11}|[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/g);
+            return parts.map((part, i) => {
+                if (part.match(phoneRegex)) return <a key={i} href={"tel:" + part} className="text-rose-500 underline font-bold" onClick={(e)=>{ e.stopPropagation(); sendGAEvent('tap_phone', { phone_number: part }); }}>{part}</a>;
+                if (part.match(emailRegex)) return <a key={i} href={"mailto:" + part} className="text-rose-500 underline font-bold" onClick={(e)=>{ e.stopPropagation(); sendGAEvent('tap_email', { email: part }); }}>{part}</a>;
+                return part;
+            });
+        };
+
+        // --- PWA用の通信関数 (fetchを使用) ---
         const runGAS = async (functionName, args = {}) => {
             const params = new URLSearchParams({ action: functionName, ...args });
             try {
                 const response = await fetch(`${GAS_API_URL}?${params}`);
-                const data = await response.json();
-                return data;
+                const json = await response.json();
+                return json;
             } catch (e) {
-                console.error("API Error", e);
-                return { success: false, message: "通信エラー" };
+                console.error("API Error:", e);
+                // エラー時のダミーデータ（アプリが真っ白になるのを防ぐ）
+                return { 
+                    communalPlaces: [], dayService: [], news: [], 
+                    about: {'タイトル':'読込エラー', '総アクセス数':0}, 
+                    userData: {}, masterData: [], questionMaster: [], collection: [] 
+                };
             }
         };
 
-        const sendGAEvent = (eventName, params) => { if (typeof window.gtag === 'function') window.gtag('event', eventName, params); };
-        const formatImageUrl = (url) => { if (!url) return null; if (url.includes('drive.google.com')) { const idMatch = url.match(/\/d\/([-_\w]+)/) || url.match(/id=([-_\w]+)/); if (idMatch) return `https://drive.google.com/uc?export=view&id=${idMatch[1]}`; } return url; };
-        const renderClickableText = (text) => { if (!text) return ''; return String(text).split(/(\d{2,4}-\d{2,4}-\d{3,4}|\d{10,11})/).map((part, i) => part.match(/\d{2,4}-\d{2,4}-\d{3,4}|\d{10,11}/) ? <a key={i} href={"tel:"+part} className="text-rose-500 underline font-bold" onClick={(e)=>e.stopPropagation()}>{part}</a> : part); };
-
         const Loading = () => ( <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-gray-500"><i className="fas fa-spinner fa-spin text-4xl text-rose-500 mb-3"></i><p className="font-semibold">読み込み中...</p></div> );
         
-        // --- Components ---
-        const InstallPrompt = () => {
-            const [show, setShow] = useState(false);
-            useEffect(() => {
-                const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
-                const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-                if (isIos && !isStandalone) setTimeout(() => setShow(true), 2000);
-            }, []);
-            if (!show) return null;
+        const CustomAlert = ({ message, type, onClose }) => {
+            useEffect(() => { const timer = setTimeout(onClose, 6000); return () => clearTimeout(timer); }, [message, onClose]);
+            const colors = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
             return (
-                <div className="fixed bottom-[80px] left-4 right-4 bg-gray-900/90 text-white p-4 rounded-xl shadow-2xl z-[9999] animate-bounce">
-                    <div className="flex justify-between"><h3 className="font-bold text-sm">アプリとして使えます</h3><button onClick={()=>setShow(false)}><i className="fas fa-times"></i></button></div>
-                    <p className="text-xs mt-1">画面下の <i className="fas fa-share-square mx-1"></i> から「ホーム画面に追加」を押してください。</p>
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[11000] p-3 max-w-xs w-full animate-pulse-once">
+                    <div className={`flex items-start text-white text-sm font-bold px-4 py-3 rounded-xl shadow-lg ${colors} relative`} role="alert">
+                        <i className={`fas ${type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} mr-2 mt-1`}></i>
+                        <p className="flex-1 whitespace-pre-wrap">{message}</p>
+                        <button onClick={onClose} className="ml-2 text-white/80 hover:text-white"><i className="fas fa-times"></i></button>
+                    </div>
                 </div>
             );
         };
 
-        const MapComponent = ({ items, type, center, onItemClick, children }) => {
-            const mapRef = useRef(null);
-            const layerRef = useRef(null);
-            useEffect(() => { window.handleDetail = (i, t) => onItemClick(items[i], t); }, [items]);
+        // --- PWAインストール誘導バナー ---
+        const InstallBanner = ({ onClose }) => {
+            const [show, setShow] = useState(false);
             useEffect(() => {
-                if(!mapRef.current) {
-                    const map = L.map('map-container').setView(center, 13);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-                    mapRef.current = map;
-                    layerRef.current = L.featureGroup().addTo(map);
-                }
-                const layer = layerRef.current;
-                layer.clearLayers();
-                items.forEach((item, i) => {
-                    const ll = item['緯度経度'] ? item['緯度経度'].split(',').map(Number) : null;
-                    if(ll) L.marker(ll).bindPopup(`<b>${item['名前']||item['デイサービスセンター名']}</b><br><button onclick="window.handleDetail(${i},'${type}')" style="color:blue">詳細</button>`).addTo(layer);
-                });
-            }, [items, type]);
-            return <div className="relative w-full h-full"><div id="map-container" className="w-full h-full"></div>{children}</div>;
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+                if (isMobile && !isStandalone) setTimeout(() => setShow(true), 3000);
+            }, []);
+            if (!show) return null;
+            return (
+                <div className="fixed bottom-[80px] left-4 right-4 z-[9000] bg-gray-900/90 text-white p-4 rounded-xl shadow-2xl backdrop-blur-sm animate-pulse-once">
+                    <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-bold text-sm"><i className="fas fa-mobile-alt text-rose-400 mr-2"></i>アプリとして使えます</h3>
+                        <button onClick={()=>{setShow(false); onClose();}}><i className="fas fa-times text-gray-400"></i></button>
+                    </div>
+                    <p className="text-xs text-gray-300 mb-3 leading-relaxed">ホーム画面に追加すると、<br/>全画面で使いやすくなります。</p>
+                    <div className="bg-white/10 rounded p-2 text-xs">
+                        {/iPhone|iPad|iPod/.test(navigator.userAgent) ? 
+                            <span>画面下の <i className="fas fa-share-square mx-1"></i> から「ホーム画面に追加」</span> : 
+                            <span>メニュー <i className="fas fa-ellipsis-v mx-1"></i> から「ホーム画面に追加」</span>}
+                    </div>
+                </div>
+            );
         };
 
-        // --- Main App ---
-        const App = () => {
-            const [data, setData] = useState(null);
-            const [tab, setTab] = useState('gathering');
-            const [view, setView] = useState('map');
-            const [sel, setSel] = useState(null);
-            const [alert, setAlert] = useState(null);
-            const [lgText, setLgText] = useState(false);
-            const [qModal, setQModal] = useState(false);
-            const [preview, setPreview] = useState(null);
-            const [dailyQ, setDailyQ] = useState(null);
-
-            useEffect(() => { if(lgText) document.body.classList.add('text-size-large'); else document.body.classList.remove('text-size-large'); }, [lgText]);
-
+        const DetailModal = ({ item, type, headers, onClose }) => {
             useEffect(() => {
-                const init = async () => {
-                    let uid = localStorage.getItem('yono_uid');
-                    if(!uid) { uid = crypto.randomUUID(); localStorage.setItem('yono_uid', uid); }
-                    const res = await runGAS('getAllData', { userId: uid });
-                    if(!res.error) setData(res);
-                };
-                init();
-            }, []);
-
-            const handleWater = () => {
-                const now = new Date();
-                if (localStorage.getItem('last_quiz') === now.toDateString()) { setAlert('本日は回答済みです'); return; }
-                if(now.getHours() < 17) { setAlert('質問は17時からです'); return; }
-                const qs = data.questionMaster || [];
-                if(qs.length > 0) { setDailyQ(qs[Math.floor(Math.random()*qs.length)]); setQModal(true); }
-            };
-
-            const handleAns = async (opt) => {
-                setQModal(false);
-                const pt = parseInt(opt.pt);
-                setAlert(pt > 0 ? `水を${pt}回あげました！` : 'また明日！');
-                if(pt > 0) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-                await runGAS('addQuizPoints', { userId: localStorage.getItem('yono_uid'), points: pt });
-                localStorage.setItem('last_quiz', new Date().toDateString());
-                const res = await runGAS('getAllData', { userId: localStorage.getItem('yono_uid') });
-                setData(res);
-            };
-
-            const getRoseImg = () => {
-                if(!data || !data.masterData) return null;
-                const pt = data.userData.rosePoints || 0;
-                const lvls = data.masterData.filter(m => !isNaN(parseInt(m['必要累積ポイント']))).sort((a,b)=>a['必要累積ポイント']-b['必要累積ポイント']);
-                let img = lvls[0]?.['画像URL'];
-                lvls.forEach(l => { if(pt >= l['必要累積ポイント']) img = l['画像URL']; });
-                
-                // 枯れ判定
-                const last = data.userData.lastActivity;
-                if(last && (new Date().getTime() - last) > (data.witherDays * 86400000)) {
-                   const dead = data.masterData.find(m => m['成長段階'] === '枯れた状態');
-                   if(pt >= 80 && dead) return formatImageUrl(dead['画像URL']);
-                   if(pt < 80) return formatImageUrl(lvls[0]?.['画像URL']); // リセット風
-                }
-                return formatImageUrl(img);
-            };
-
-            if (!data) return <div className="h-screen flex items-center justify-center"><Loading /></div>;
-
-            const items = tab === 'gathering' ? data.communalPlaces : (tab === 'day' ? data.dayService : []);
-            const type = tab === 'gathering' ? 'communalPlace' : 'dayService';
+                const name = type === 'communalPlace' ? item['名前'] : item['デイサービスセンター名'];
+                sendGAEvent('view_detail', { item_name: name || 'unknown', item_category: type });
+            }, [item, type]);
+            if (!item) return null;
+            let title = type === 'communalPlace' ? (item['名前'] || '名称不明') : (item['デイサービスセンター名'] || '名称不明');
+            let images = [item['画像1'], item['画像2']].filter(url => url && url.startsWith('http'));
+            const headerImage = images.length > 0 ? formatImageUrl(images[0]) : null;
+            const hitokoto = item['一言'] || item['事業所の強み、PRポイント'];
+            const displayOrder = type === 'communalPlace' ? ['場所', '日時', '人数', '対象', '内容', '費用', 'ウェブサイト', '問い合わせ', 'メール', '問い合わせ2', '種別'] : ['サービス提供時間', '定休日', '定員', '備考', 'Facebook'];
 
             return (
-                <div className="flex flex-col h-full">
-                    <header className="flex justify-between items-center px-4 py-3 bg-white border-b z-50 sticky top-0 shadow-sm">
-                        <h1 className="text-lg font-extrabold text-rose-500"><i className="fas fa-map-marked-alt mr-2"></i>与野支え合いマップ</h1>
-                        <button onClick={()=>setLgText(!lgText)} className="border px-2 py-1 rounded text-xs font-bold">あ/亜</button>
+                <div className="modal-backdrop overflow-y-auto p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <div className="relative h-56 bg-gray-200 flex-shrink-0">
+                            {headerImage ? <img src={headerImage} className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='flex'}} /> : null}
+                            <div className="w-full h-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white" style={{display: headerImage?'none':'flex'}}><i className={`fas ${type==='communalPlace'?'fa-handshake':'fa-house-chimney-medical'} text-6xl opacity-50`}></i></div>
+                            <button onClick={onClose} className="absolute top-3 right-3 bg-black/30 hover:bg-black/50 text-white rounded-full w-8 h-8 flex items-center justify-center backdrop-blur-sm"><i className="fas fa-times"></i></button>
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-5"><span className="inline-block bg-rose-500 text-white text-xs px-2 py-1 rounded mb-2 shadow-sm border border-rose-400">{item['カテゴリー'] || (type === 'dayService' ? 'デイサービス' : '通いの場')}</span><h2 className="text-2xl font-bold text-white drop-shadow-md leading-tight">{title}</h2></div>
+                        </div>
+                        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+                            {hitokoto && <div className="bg-rose-50 p-4 rounded-xl border-l-4 border-rose-400 shadow-sm"><h3 className="font-bold text-rose-600 text-sm mb-1"><i className="fas fa-comment-dots mr-1"></i>ひとこと</h3><p className="text-gray-800 font-bold leading-relaxed">{renderClickableText(hitokoto)}</p></div>}
+                            {displayOrder.map((key, i) => item[key] && (
+                                <div key={i} className="flex flex-col border-b border-gray-100 py-2">
+                                    <span className="font-bold text-gray-500 text-xs mb-1">{key}</span>
+                                    <span className="text-gray-800 text-sm whitespace-pre-wrap leading-relaxed">{key === 'ウェブサイト' || key === 'Facebook' ? <a href={item[key]} target="_blank" className="text-rose-500 underline break-all" onClick={()=>sendGAEvent('click_link', {url: item[key]})}>{item[key]}</a> : renderClickableText(item[key])}</span>
+                                </div>
+                            ))}
+                            {images.length > 1 && <div className="pt-4"><h3 className="font-bold text-gray-700 mb-3 text-sm">ギャラリー</h3><div className="grid grid-cols-2 gap-3">{images.slice(1).map((url, i) => <img key={i} src={formatImageUrl(url)} className="w-full h-32 object-cover rounded-lg shadow-sm" referrerPolicy="no-referrer" onError={(e)=>e.target.style.display='none'}/>)}</div></div>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ManualModal = ({ imageUrls, onClose }) => {
+            if (!imageUrls || imageUrls.length === 0) return null;
+            return (
+                <div className="modal-backdrop z-[12000] p-0" onClick={onClose}>
+                    <div className="bg-gray-100 w-full h-full md:max-w-2xl md:h-[90vh] md:rounded-2xl md:overflow-hidden flex flex-col relative" onClick={e => e.stopPropagation()}>
+                        <div className="bg-white p-4 shadow-sm z-10 flex justify-between items-center"><h2 className="font-bold text-lg text-gray-800 flex items-center"><i className="fas fa-book-open text-rose-500 mr-2"></i>アプリの説明書</h2><button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 font-bold"><i className="fas fa-times"></i></button></div>
+                        <div className="flex-1 overflow-y-auto bg-gray-200"><div className="flex flex-col items-center">{imageUrls.map((url, i) => (<img key={i} src={formatImageUrl(url.trim())} className="w-full max-w-2xl object-contain bg-white mb-2 shadow-sm" referrerPolicy="no-referrer" loading="lazy" />))}</div><div className="p-8 text-center text-gray-500 text-sm pb-20"><p>説明書は以上です</p><button onClick={onClose} className="mt-4 px-8 py-3 bg-rose-500 text-white font-bold rounded-full shadow-lg">閉じる</button></div></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AboutModal = ({ about, onClose }) => {
+            const qrCodeRef = useRef(null);
+            const [showInstallGuide, setShowInstallGuide] = useState(false);
+            const [showManual, setShowManual] = useState(false);
+            useEffect(() => {
+                if (qrCodeRef.current && about['共有']) {
+                    try { qrCodeRef.current.innerHTML = ''; new QRCode(qrCodeRef.current, { text: about['共有'], width: 120, height: 120, correctLevel: QRCode.CorrectLevel.L }); } catch(e) {}
+                }
+            }, [about]);
+            const handleCopyLink = () => { navigator.clipboard.writeText(about['リンクコピー'] || window.location.href).then(() => alert('リンクをコピーしました！')); };
+            const manualImages = useMemo(() => { if (!about['説明書']) return []; return about['説明書'].split(',').filter(url => url.trim().length > 0); }, [about]);
+
+            return (
+                <div className="modal-backdrop p-4 overflow-y-auto" onClick={onClose}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl mx-auto overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b bg-gray-50 flex justify-between items-center"><h2 className="text-xl font-bold text-gray-800">アプリについて</h2><button onClick={onClose} className="text-gray-500 hover:text-gray-700"><i className="fas fa-times"></i></button></div>
+                        <div className="p-6 space-y-6 overflow-y-auto">
+                            <div className="text-center"><h3 className="font-bold text-gray-800 text-xl mb-1">{about['タイトル'] || '与野支え合いマップ'}</h3><p className="text-sm text-gray-500">v27.0 (PWA)</p></div>
+                            {manualImages.length > 0 && (<button onClick={() => setShowManual(true)} className="w-full py-4 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-xl font-bold shadow-md flex items-center justify-center text-lg"><i className="fas fa-book-reader mr-2 text-2xl"></i>使い方を見る（説明書）</button>)}
+                            {about['テキスト1'] && <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm"><p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{renderClickableText(about['テキスト1'])}</p></div>}
+                            <div className="grid grid-cols-2 gap-3"><button onClick={handleCopyLink} className="flex items-center justify-center gap-2 bg-orange-50 text-orange-600 font-bold py-3 rounded-xl border border-orange-100 hover:bg-orange-100 transition"><i className="fas fa-link"></i>リンクコピー</button><button onClick={() => setShowInstallGuide(true)} className="flex items-center justify-center gap-2 bg-blue-50 text-blue-600 font-bold py-3 rounded-xl border border-blue-100 hover:bg-blue-100 transition"><i className="fas fa-download"></i>ホーム画面に追加</button></div>
+                            <div className="flex flex-col items-center bg-gray-50 p-4 rounded-xl border border-gray-100"><p className="text-xs font-bold text-gray-500 mb-3">アプリを共有（QRコード）</p><div ref={qrCodeRef} className="bg-white p-2 rounded-lg"></div></div>
+                            <div className="flex justify-between items-center pt-2 border-t border-gray-100 text-xs text-gray-400"><span>{about['連絡先']}</span><span>{about['総アクセス数'] ? parseInt(about['総アクセス数']).toLocaleString() : 0} PV</span></div>
+                        </div>
+                    </div>
+                    {showInstallGuide && <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-6" onClick={() => setShowInstallGuide(false)}><div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center space-y-4" onClick={e => e.stopPropagation()}><i className="fas fa-mobile-alt text-4xl text-blue-500"></i><h3 className="text-lg font-bold text-gray-800">ホーム画面への追加方法</h3><div className="text-left text-sm text-gray-600 space-y-3 bg-gray-50 p-4 rounded-xl"><div><strong className="text-gray-800 block mb-1">iPhone (Safari)</strong><ol className="list-decimal list-inside space-y-1 ml-1"><li>「共有アイコン <i className="fas fa-share-square"></i>」をタップ</li><li>「ホーム画面に追加」を選択</li><li>右上の「追加」をタップ</li></ol></div><div className="border-t border-gray-200 pt-2"><strong className="text-gray-800 block mb-1">Android (Chrome)</strong><ol className="list-decimal list-inside space-y-1 ml-1"><li>メニュー「<i className="fas fa-ellipsis-v"></i>」をタップ</li><li>「ホーム画面に追加」を選択</li><li>「追加」をタップ</li></ol></div></div><button onClick={() => setShowInstallGuide(false)} className="w-full py-3 bg-gray-800 text-white rounded-xl font-bold">閉じる</button></div></div>}
+                    {showManual && <ManualModal imageUrls={manualImages} onClose={() => setShowManual(false)} />}
+                </div>
+            );
+        };
+
+        const NewsModal = ({ news, onClose }) => {
+            const [doNotShow, setDoNotShow] = useState(false);
+            const activeNews = useMemo(() => { if (!news) return []; const today = new Date(); today.setHours(0,0,0,0); return news.filter(item => { const start = item['Popup_Start (開始日)'] ? new Date(item['Popup_Start (開始日)']) : null; const end = item['Popup_End (終了日)'] ? new Date(item['Popup_End (終了日)']) : null; if(end) end.setHours(23,59,59,999); return (!start || start <= today) && (!end || end >= today); }); }, [news]);
+            const handleClose = () => { if (doNotShow && activeNews.length > 0) localStorage.setItem('last_seen_news', activeNews[0]['タイトル']); onClose(); };
+            return (
+                <div className="modal-backdrop p-4 overflow-y-auto" onClick={onClose}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl mx-auto" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b bg-gray-50 rounded-t-xl flex justify-between items-center"><h2 className="text-xl font-bold text-gray-800">お知らせ</h2><button onClick={onClose} className="text-gray-500 hover:text-gray-700"><i className="fas fa-times"></i></button></div>
+                        <div className="p-6 max-h-[70vh] overflow-y-auto space-y-4">
+                            {activeNews.length > 0 ? activeNews.map((item, i) => (<div key={i} className="bg-rose-50 p-4 rounded-xl border border-rose-100"><h4 className="font-bold text-gray-800">{item['タイトル']}</h4><p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{renderClickableText(item['サブタイトル'])}</p>{item['テキスト'] && <p className="text-sm text-gray-600 mt-2 whitespace-pre-wrap">{renderClickableText(item['テキスト'])}</p>}{item['画像'] && <img src={formatImageUrl(item['画像'])} className="mt-2 w-full h-32 object-cover rounded-lg" referrerPolicy="no-referrer" />}</div>)) : <p className="text-center text-gray-400 py-10">現在お知らせはありません。</p>}
+                        </div>
+                        <div className="p-4 border-t flex justify-between items-center"><label className="flex items-center text-sm text-gray-600 cursor-pointer"><input type="checkbox" className="mr-2 h-4 w-4 accent-rose-500" checked={doNotShow} onChange={(e) => setDoNotShow(e.target.checked)} />今後表示しない</label><button onClick={handleClose} className="px-6 py-2 bg-gray-100 hover:bg-gray-200 rounded-full font-bold transition">閉じる</button></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const QuestionModal = ({ question, onAnswer, onClose }) => {
+            if (!question) return null;
+            return (
+                <div className="modal-backdrop p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden animate-pulse-once" onClick={e => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-rose-500 to-pink-400 p-6 text-white text-center"><i className="fas fa-question-circle text-4xl mb-2 animate-bounce"></i><h2 className="text-2xl font-bold">今日の質問！</h2></div>
+                        <div className="p-6 space-y-4"><p className="text-lg font-bold text-gray-800 text-center">{question['質問']}</p><div className="space-y-3">{question.options.map((opt, i) => (<button key={i} onClick={() => onAnswer(opt)} className="w-full py-4 px-6 bg-white border-2 border-rose-100 rounded-xl text-left hover:bg-rose-50 font-bold text-gray-700 shadow-sm flex items-center"><span className="bg-rose-100 text-rose-600 w-8 h-8 rounded-full flex items-center justify-center mr-3">{i+1}</span>{opt.text}</button>))}</div></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const CollectionHelpModal = ({ onClose }) => {
+            return (
+                <div className="modal-backdrop p-4" onClick={onClose}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto" onClick={e => e.stopPropagation()}>
+                        <div className="p-5 border-b bg-rose-50 rounded-t-xl flex justify-between items-center"><h2 className="text-xl font-bold text-rose-600">遊び方</h2><button onClick={onClose}><i className="fas fa-times text-gray-500"></i></button></div>
+                        <div className="p-6 space-y-6"><div><h3 className="font-bold text-gray-800 flex items-center mb-2"><i className="fas fa-seedling text-rose-500 mr-2"></i>バラメーター</h3><p className="text-sm text-gray-600">毎日1回、質問に答えて水やりをするとポイントが貯まります。ポイントが貯まるとバラが成長します。</p></div></div>
+                        <div className="p-4 border-t flex justify-end"><button onClick={onClose} className="px-6 py-2 bg-gray-100 rounded-full font-bold">閉じる</button></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AuthModal = ({ currentUserId, onClose, onLoginSuccess }) => {
+            const [mode, setMode] = useState('menu'); 
+            const [inputId, setInputId] = useState('');
+            const [inputPin, setInputPin] = useState('');
+            const [msg, setMsg] = useState(null);
+            const [loading, setLoading] = useState(false);
+
+            const handleSave = async () => {
+                if(!inputId || !inputPin || inputPin.length < 4) { setMsg({text:'お名前と、4桁の数字を入れてください', type:'error'}); return; }
+                setLoading(true);
+                const res = await runGAS('registerUserAccount', { userId: currentUserId, loginId: inputId, pin: inputPin });
+                setLoading(false);
+                if(res.success) { alert(res.message); onClose(); } else { setMsg({text: res.message, type:'error'}); }
+            };
+
+            const handleLoad = async () => {
+                if(!inputId || !inputPin) { setMsg({text:'お名前と、4桁の数字を入れてください', type:'error'}); return; }
+                setLoading(true);
+                const res = await runGAS('loginUserAccount', { loginId: inputId, pin: inputPin });
+                setLoading(false);
+                if(res.success) { alert(res.message); onLoginSuccess(res.uuid); onClose(); } else { setMsg({text: res.message, type:'error'}); }
+            };
+
+            return (
+                <div className="modal-backdrop p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-auto overflow-hidden border-4 border-rose-100" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b bg-rose-50 flex justify-between items-center"><h2 className="font-bold text-gray-800 flex items-center"><i className="fas fa-save text-rose-500 mr-2"></i>おなまえ登録・引継ぎ</h2><button onClick={onClose} className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-gray-500 shadow-sm"><i className="fas fa-times"></i></button></div>
+                        <div className="p-6">
+                            {mode === 'menu' && (
+                                <div className="space-y-6 text-center"><p className="text-base text-gray-700 font-bold leading-relaxed">スマホを変えた時などに、<br/>今のデータを移すことができます。</p><button onClick={()=>setMode('save')} className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-bold shadow-lg flex items-center justify-center text-lg"><i className="fas fa-pencil-alt mr-3 text-2xl"></i><div>名前を決めて保存する<br/><span className="text-xs font-normal opacity-90">今のデータを登録</span></div></button><button onClick={()=>setMode('load')} className="w-full py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-2xl font-bold shadow-lg flex items-center justify-center text-lg"><i className="fas fa-mobile-alt mr-3 text-2xl"></i><div>データの続きをやる<br/><span className="text-xs font-normal opacity-90">機種変更した方はこちら</span></div></button></div>
+                            )}
+                            {(mode === 'save' || mode === 'load') && (
+                                <div className="space-y-5">
+                                    <h3 className="font-bold text-center text-lg text-gray-800 border-b pb-2">{mode==='save' ? 'あなたのお名前を登録' : '以前のお名前を入力'}</h3>
+                                    <div><label className="block text-sm font-bold text-gray-600 mb-1"><i className="fas fa-user mr-1 text-rose-400"></i>おなまえ (ニックネーム)</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl outline-none border-2 border-gray-200 focus:border-rose-500 text-lg font-bold text-center placeholder-gray-300" placeholder="例：はなちゃん" value={inputId} onChange={e=>setInputId(e.target.value)} /></div>
+                                    <div><label className="block text-sm font-bold text-gray-600 mb-1"><i className="fas fa-key mr-1 text-rose-400"></i>あいことば (数字4桁)</label><input type="tel" maxLength="8" className="w-full p-4 bg-gray-50 rounded-xl outline-none border-2 border-gray-200 focus:border-rose-500 text-2xl font-bold text-center tracking-widest placeholder-gray-300" placeholder="0000" value={inputPin} onChange={e=>setInputPin(e.target.value)} /></div>
+                                    {msg && <div className={`p-3 rounded-xl text-center font-bold text-sm ${msg.type==='error'?'bg-red-50 text-red-500':'bg-green-50 text-green-600'}`}>{msg.text}</div>}
+                                    <div className="pt-2 space-y-3"><button onClick={mode==='save' ? handleSave : handleLoad} disabled={loading} className="w-full py-4 bg-rose-500 text-white rounded-2xl font-bold shadow-md disabled:opacity-50 text-lg">{loading ? '通信中...' : (mode==='save' ? 'これで登録する' : '復元する')}</button><button onClick={()=>{setMode('menu'); setMsg(null);}} className="w-full py-3 text-gray-500 font-bold bg-gray-100 rounded-xl">戻る</button></div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const WelcomeModal = ({ onClose }) => {
+            const [step, setStep] = useState(0);
+            const content = [
+                { title: 'ようこそ！', text: '「与野支え合いマップ」へようこそ！\nこのアプリは、地域の「通いの場」を探したり、健康づくりを楽しむためのアプリです。', icon: 'fa-map-marked-alt', color: 'text-rose-500' },
+                { title: 'バラを育てよう', text: '毎日1回「今日の質問」に答えて水をやると、ポイントが貯まってバラが成長します。\n毎日チェックして、綺麗なバラを咲かせましょう！', icon: 'fa-seedling', color: 'text-green-500' },
+                { title: 'さあ、はじめよう', text: 'まずは地図から近くの場所を探したり、質問に答えてみてください。\n最後に、データを守るための「おなまえ登録」へ進みます。', icon: 'fa-smile-wink', color: 'text-orange-500' }
+            ];
+            return (
+                <div className="modal-backdrop p-4" onClick={()=>{}}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-auto overflow-hidden p-6 text-center" onClick={e => e.stopPropagation()}>
+                        <div className="mb-6 h-32 flex items-center justify-center"><i className={`fas ${content[step].icon} text-7xl ${content[step].color} animate-bounce`}></i></div>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-4">{content[step].title}</h2><p className="text-gray-600 mb-8 whitespace-pre-wrap leading-relaxed font-bold text-sm h-24 flex items-center justify-center">{content[step].text}</p>
+                        <div className="flex gap-2 justify-center mb-6">{content.map((_, i) => (<div key={i} className={`w-2 h-2 rounded-full ${i===step ? 'bg-rose-500 w-4' : 'bg-gray-200'} transition-all`}></div>))}</div>
+                        <button onClick={() => { if(step < 2) setStep(step+1); else onClose(); }} className="w-full py-4 bg-rose-500 text-white rounded-xl font-bold shadow-md text-lg hover:bg-rose-600 transition">{step < 2 ? '次へ' : '次へ（おなまえ登録）'}</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const MapComponent = ({ items, type, center, zoom, onItemClick, children, onLocate }) => {
+            const mapRef = useRef(null);
+            const markerLayerRef = useRef(null);
+            const userMarkerRef = useRef(null);
+            
+            useEffect(() => { window.handleDetailClick = (index, itemType) => { onItemClick(items[index], itemType); }; }, [items, onItemClick]);
+            const createCustomIcon = (iconClass, color) => L.divIcon({ html: `<div class="relative"><i class="${iconClass} text-4xl drop-shadow-lg" style="color: ${color}; -webkit-text-stroke: 1px white;"></i></div>`, className: '', iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -38] });
+            const iconMap = useMemo(() => ({ communalPlace: createCustomIcon('fas fa-map-marker-alt', '#F8355C'), dayService: createCustomIcon('fas fa-map-marker-alt', '#10B981') }), []);
+            
+            useEffect(() => { 
+                if (!mapRef.current) { 
+                    const map = L.map('map-container').setView(center, zoom); 
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 18 }).addTo(map); 
+                    mapRef.current = map; 
+                    markerLayerRef.current = L.featureGroup().addTo(map); 
+                    setTimeout(() => map.invalidateSize(), 200); 
+                } 
+            }, [center, zoom]);
+
+            useEffect(() => { 
+                if (!mapRef.current) return; 
+                const layer = markerLayerRef.current; 
+                layer.clearLayers(); 
+                items.forEach((item, index) => { 
+                    const latLng = item['緯度経度'] ? item['緯度経度'].split(',').map(Number) : null; 
+                    if (!latLng || latLng.length !== 2) return; 
+                    const name = type === 'communalPlace' ? item['名前'] : item['デイサービスセンター名']; 
+                    const category = item['カテゴリー'] || (type === 'dayService' ? 'デイサービス' : '通いの場'); 
+                    const popupContent = `<div class="custom-popup-wrapper"><div class="custom-popup-header">${category}</div><div class="custom-popup-body"><p style="font-weight:bold; font-size:14px; margin-bottom:8px;">${name}</p><button onclick="window.handleDetailClick(${index}, '${type}')" style="background:#F8355C; color:white; border:none; padding:6px 12px; border-radius:20px; font-weight:bold; cursor:pointer;">詳細を見る</button></div></div>`; 
+                    L.marker(latLng, { icon: iconMap[type] }).bindPopup(popupContent).addTo(layer); 
+                }); 
+            }, [items, type, iconMap]);
+
+            const handleLocate = () => {
+                if(!mapRef.current) return;
+                mapRef.current.locate({setView: true, maxZoom: 16});
+                mapRef.current.on('locationfound', (e) => {
+                    if(userMarkerRef.current) mapRef.current.removeLayer(userMarkerRef.current);
+                    userMarkerRef.current = L.marker(e.latlng, { icon: L.divIcon({html: '<i class="fas fa-street-view text-blue-600 text-4xl drop-shadow-md bg-white rounded-full p-1"></i>', className: '', iconSize: [40, 40], iconAnchor: [20, 40]}) }).addTo(mapRef.current).bindPopup("現在地").openPopup();
+                });
+                mapRef.current.on('locationerror', (e) => { alert("現在地が取得できませんでした。"); });
+            };
+
+            return (
+                <div className="relative w-full h-full">
+                    <div id="map-container" className="w-full h-full"></div>
+                    <div className="map-current-loc-btn" onClick={handleLocate}><i className="fas fa-crosshairs"></i></div>
+                    {children}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [data, setData] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+            const [activeTab, setActiveTab] = useState('gathering'); 
+            const [mapView, setMapView] = useState(true);
+            const [selectedItem, setSelectedItem] = useState(null);
+            const [selectedItemType, setSelectedItemType] = useState(null);
+            const [alertState, setAlertState] = useState(null);
+            const [showNewsModal, setShowNewsModal] = useState(false);
+            const [showAboutModal, setShowAboutModal] = useState(false);
+            const [showQuestion, setShowQuestion] = useState(false);
+            const [showCollectionHelp, setShowCollectionHelp] = useState(false);
+            const [dailyQuestion, setDailyQuestion] = useState(null);
+            const [showWelcome, setShowWelcome] = useState(false);
+            const [showAuthModal, setShowAuthModal] = useState(false);
+            const [searchText, setSearchText] = useState("");
+            const [selectedCategory, setSelectedCategory] = useState("すべて");
+            const [isLargeText, setIsLargeText] = useState(false); 
+            const [previewImage, setPreviewImage] = useState(null); 
+            const [hasShownNewsSession, setHasShownNewsSession] = useState(false);
+            const [pendingWitherCheck, setPendingWitherCheck] = useState(false); 
+            const [showInstallBanner, setShowInstallBanner] = useState(false);
+            const initialCenter = [35.8797, 139.6247]; const initialZoom = 13;
+
+            const handleLoginSuccess = (newUuid) => {
+                localStorage.setItem('yono_map_user_id', newUuid);
+                window.location.reload();
+            };
+
+            const handleTabChange = (tabName) => {
+                setActiveTab(tabName);
+                if (tabName === 'collection') setMapView(false);
+                else setMapView(true);
+                sendGAEvent('change_tab', { tab_name: tabName });
+            };
+
+            useEffect(() => {
+                if (isLargeText) document.body.classList.add('text-size-large');
+                else document.body.classList.remove('text-size-large');
+            }, [isLargeText]);
+
+            const checkWitherWarning = () => {
+                if (!data || !data.userData) return;
+                const lastActive = data.userData.lastActivity || 0;
+                const witherLimitDays = data.witherDays || 14;
+                const userName = data.userData.nickName ? `${data.userData.nickName}さん` : '育て親さん';
+
+                if (lastActive > 0) {
+                    const now = new Date().getTime();
+                    const diffDays = (now - lastActive) / (1000 * 60 * 60 * 24);
+                    if (diffDays > 7 && diffDays <= witherLimitDays) {
+                        setAlertState({ 
+                            message: `【注意】${userName}、水やりが1週間以上あいています！\nこのままだとバラが枯れてしまいます。\n今日、質問に答えて水をあげましょう！`, 
+                            type: 'error' 
+                        });
+                    }
+                }
+            };
+
+            useEffect(() => {
+                const loadData = async () => {
+                    try {
+                        setIsLoading(true);
+                        let userId = localStorage.getItem('yono_map_user_id');
+                        if (!userId) { 
+                            userId = crypto.randomUUID(); 
+                            localStorage.setItem('yono_map_user_id', userId);
+                            setShowWelcome(true);
+                        }
+                        runGAS('incrementAccessCount');
+                        const result = await runGAS('getAllData', { userId });
+                        setData(result);
+                    } catch (error) {
+                        console.error(error);
+                        setData({ communalPlaces: [], dayService: [], news: [], about: {'総アクセス数':0}, userData: {}, masterData: [], questionMaster: [], collection: [] });
+                        setAlertState({ message: '読み込みエラー', type: 'error' });
+                    } finally { setIsLoading(false); }
+                };
+                loadData();
+            }, []);
+
+            useEffect(() => {
+                if (data && !showWelcome && !showAuthModal && !hasShownNewsSession) {
+                    const today = new Date(); today.setHours(0,0,0,0);
+                    const hasNews = data.news && data.news.some(item => {
+                        const start = item['Popup_Start (開始日)'] ? new Date(item['Popup_Start (開始日)']) : null;
+                        const end = item['Popup_End (終了日)'] ? new Date(item['Popup_End (終了日)']) : null;
+                        if(end) end.setHours(23,59,59,999);
+                        return (!start || start <= today) && (!end || end >= today);
+                    });
+                    const lastSeen = localStorage.getItem('last_seen_news');
+                    const currentNewsTitle = hasNews && data.news.length > 0 ? data.news[0]['タイトル'] : null;
+
+                    if (hasNews && lastSeen !== currentNewsTitle) {
+                        setShowNewsModal(true);
+                        setHasShownNewsSession(true);
+                        setPendingWitherCheck(true); 
+                    } else {
+                        checkWitherWarning();
+                        setHasShownNewsSession(true);
+                    }
+                }
+            }, [data, showWelcome, showAuthModal, hasShownNewsSession]);
+
+            const handleNewsClose = () => {
+                setShowNewsModal(false);
+                if (pendingWitherCheck) {
+                    checkWitherWarning();
+                    setPendingWitherCheck(false);
+                }
+            };
+
+            const openCalendar = () => window.open("https://calendar.google.com/calendar/embed?src=Y18yNWQ1NmFkYzdiNzVkY2E3NTY1YTNiNjRiZTJmZGQ1ZDBkMDY3ODM5NTA0Y2NkMzg0YjIyYTZiYTNkOGUwOGUyQGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20&ctz=Asia/Tokyo", '_blank');
+
+            const handleWateringClick = () => {
+                const now = new Date();
+                if (now.getHours() < 17) { setAlertState({ message: '質問は毎日17:00～23:59の間に回答できます。', type: 'info' }); return; }
+                if (localStorage.getItem('last_quiz_date') === now.toISOString().split('T')[0]) { setAlertState({ message: '本日は回答済みです。', type: 'info' }); return; }
+                let questions = data.questionMaster;
+                if (!questions || questions.length === 0) questions = [{ 質問: '今日は誰かと話しましたか？', options: [{text:'はい', pt:2}, {text:'いいえ', pt:0}] }];
+                if (!dailyQuestion) { const rnd = Math.floor(Math.random() * questions.length); setDailyQuestion(questions[rnd]); }
+                setShowQuestion(true);
+            };
+
+            const handleAnswer = async (option) => {
+                setShowQuestion(false);
+                const count = parseInt(option.pt) || 0; 
+                const text = option.text;
+                const userName = data.userData.nickName ? `${data.userData.nickName}さん` : '育て親さん';
+                sendGAEvent('answer_quiz', { answer_text: text, watering_count: count });
+
+                let msg = "", type = "info";
+                if (count > 0) {
+                    msg = `回答ありがとうございます！\n${userName}、お水を${count}回あげました！\nバラが喜んでいます。`; 
+                    type = "success"; 
+                    confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ['#ff0000', '#00ff00', '#0000ff'] }); 
+                } else { 
+                    msg = `回答ありがとうございます。\n今日のお水やりは0回です。\nまた明日もお待ちしています。`; 
+                    type = "info"; 
+                }
+                setAlertState({ message: msg, type: type });
+                const userId = localStorage.getItem('yono_map_user_id');
+                await runGAS('addQuizPoints', { userId, points: count });
+                const result = await runGAS('getAllData', { userId });
+                setData(result);
+                localStorage.setItem('last_quiz_date', new Date().toISOString().split('T')[0]);
+            };
+
+            const handleItemClick = (item, type) => { setSelectedItem(item); setSelectedItemType(type); };
+            const categoryList = useMemo(() => { if (!data) return ['すべて']; const items = activeTab === 'gathering' ? data.communalPlaces : data.dayService; const cats = new Set(items.map(i => i['カテゴリー']).filter(Boolean)); return ['すべて', ...Array.from(cats)]; }, [data, activeTab]);
+            const filteredItems = useMemo(() => { if (!data) return []; let items = activeTab === 'gathering' ? data.communalPlaces : data.dayService; if (selectedCategory !== 'すべて') items = items.filter(i => i['カテゴリー'] === selectedCategory); if (searchText) { const lower = searchText.toLowerCase(); items = items.filter(i => (i['名前']||'').toLowerCase().includes(lower) || (i['住所']||'').toLowerCase().includes(lower)); } return items; }, [activeTab, data, selectedCategory, searchText]);
+            
+            const getRoseImage = () => { 
+                if(!data || !data.masterData) return null;
+                const currentPoints = data.userData.rosePoints || 0;
+                const lastActive = data.userData.lastActivity || 0;
+                const witherLimitDays = data.witherDays || 14;
+
+                if (lastActive > 0) {
+                    const now = new Date().getTime();
+                    const diffDays = (now - lastActive) / (1000 * 60 * 60 * 24);
+                    if (diffDays > witherLimitDays) {
+                        if (currentPoints >= 80) {
+                            const withered = data.masterData.find(m => m['成長段階'] === '枯れた状態');
+                            if (withered) return formatImageUrl(withered['画像URL']);
+                        } else {
+                            const levels = data.masterData.filter(m => m['成長段階'] !== '枯れた状態' && !isNaN(parseInt(m['必要累積ポイント'])));
+                            levels.sort((a, b) => parseInt(a['必要累積ポイント']) - parseInt(b['必要累積ポイント']));
+                            if(levels.length > 0) return formatImageUrl(levels[0]['画像URL']);
+                        }
+                    }
+                }
+                const levels = data.masterData.filter(m => m['成長段階'] !== '枯れた状態' && !isNaN(parseInt(m['必要累積ポイント'])));
+                levels.sort((a, b) => parseInt(a['必要累積ポイント']) - parseInt(b['必要累積ポイント']));
+                let selectedImg = null;
+                if(levels.length > 0) selectedImg = levels[0]['画像URL'];
+                for (let m of levels) { if (currentPoints >= parseInt(m['必要累積ポイント'])) selectedImg = m['画像URL']; }
+                return formatImageUrl(selectedImg); 
+            };
+
+            const getRoseNextPoint = () => {
+                const current = data.userData.rosePoints || 0;
+                if(data.masterData && data.masterData.length > 1) {
+                    const levels = data.masterData.filter(m => m['成長段階'] !== '枯れた状態' && !isNaN(parseInt(m['必要累積ポイント']))).sort((a, b) => parseInt(a['必要累積ポイント']) - parseInt(b['必要累積ポイント']));
+                    const nextLevel = levels.find(m => parseInt(m['必要累積ポイント']) > current);
+                    if(nextLevel) return parseInt(nextLevel['必要累積ポイント']) - current;
+                }
+                return 0; 
+            };
+
+            const handleRoseClick = () => {
+                if(!data || !data.masterData) return;
+                const imgUrl = getRoseImage();
+                if(!imgUrl) return;
+                const currentPoints = data.userData.rosePoints || 0;
+                const levels = data.masterData.filter(m => !isNaN(parseInt(m['必要累積ポイント']))).sort((a,b)=>parseInt(a['必要累積ポイント'])-parseInt(b['必要累積ポイント']));
+                let message = "";
+                for(let l of levels) { if(currentPoints >= parseInt(l['必要累積ポイント'])) message = l['メッセージ'] || ""; }
+                const lastActive = data.userData.lastActivity || 0;
+                const now = new Date().getTime();
+                const diffDays = (now - lastActive) / (1000 * 60 * 60 * 24);
+                if (diffDays > data.witherDays) {
+                     const dead = data.masterData.find(m => m['成長段階'] === '枯れた状態');
+                     if(dead) message = dead['メッセージ'] || "";
+                }
+                const replacementName = data.userData.nickName || '育て親';
+                if(message) message = message.replace(/{name}/g, replacementName);
+                setPreviewImage({ url: formatImageUrl(imgUrl), message: message });
+            };
+
+            if (isLoading) return <div className="h-screen w-screen flex items-center justify-center"><Loading /></div>;
+            if (!data) return <div className="p-4 text-center text-red-500">データエラー</div>;
+
+            const appIconUrl = data.about['アプリアイコン'] ? formatImageUrl(data.about['アプリアイコン']) : null;
+
+            return (
+                <div className="flex flex-col h-full overflow-hidden relative">
+                    <header className="flex items-center justify-between px-4 py-3 bg-white border-b shadow-sm z-40 sticky top-0" style={{zIndex: 1000}}>
+                        <h1 className="text-lg font-extrabold text-rose-500 flex items-center">{appIconUrl ? <img src={appIconUrl} className="w-6 h-6 mr-2 object-contain" referrerPolicy="no-referrer"/> : <i className="fas fa-map-marked-alt mr-2"></i>}与野支え合いマップ</h1>
+                        <div className="flex items-center gap-3">
+                            <button onClick={()=>setIsLargeText(!isLargeText)} className={`text-xs font-bold px-2 py-1 border rounded ${isLargeText?'bg-black text-white':'bg-white text-gray-600'}`}>あ/亜</button>
+                            <button onClick={() => setShowAuthModal(true)} className="flex flex-col items-center justify-center text-gray-600 hover:text-rose-500 px-2"><i className="fas fa-id-card text-2xl"></i><span className="text-[10px] font-bold">引継ぎ</span></button>
+                            <button onClick={() => setShowAboutModal(true)} className="text-gray-600 hover:text-rose-500"><i className="fas fa-info-circle text-xl"></i></button>
+                            <button onClick={() => setShowNewsModal(true)} className="text-gray-600 hover:text-rose-500 relative"><i className="fas fa-bell text-xl"></i></button>
+                        </div>
                     </header>
 
-                    <main className="main-content bg-gray-50 relative">
-                        {tab !== 'collection' ? (
-                            view === 'map' ? 
-                            <MapComponent items={items} type={type} center={[35.8797, 139.6247]} onItemClick={(i,t)=>{setSel(i);}}>
-                                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white p-1 rounded-full shadow-lg z-[1000] flex"><button onClick={()=>setView('map')} className="px-4 py-1 bg-rose-500 text-white rounded-full text-sm font-bold">地図</button><button onClick={()=>setView('list')} className="px-4 py-1 text-gray-500 text-sm font-bold">リスト</button></div>
-                            </MapComponent> :
-                            <div className="p-4 space-y-3">
-                                {items.map((it, i) => <div key={i} onClick={()=>{setSel(it)}} className="bg-white p-4 rounded shadow-sm border">{it['名前']||it['デイサービスセンター名']}</div>)}
-                                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-white p-1 rounded-full shadow-lg z-50 flex border"><button onClick={()=>setView('map')} className="px-4 py-1 text-gray-500 rounded-full text-sm font-bold">地図</button><button onClick={()=>setView('list')} className="px-4 py-1 bg-rose-500 text-white text-sm font-bold">リスト</button></div>
+                    <main className="main-content flex-grow relative bg-gray-50">
+                        {(activeTab === 'gathering' || activeTab === 'day') && (
+                            <div className="flex flex-col h-full">
+                                <div className="search-container space-y-2 bg-white p-2 shadow-sm z-10"><div className="search-wrapper"><div className="search-input-container"><i className="fas fa-search search-icon"></i><input type="text" placeholder="検索..." className="search-input" value={searchText} onChange={(e) => setSearchText(e.target.value)} /></div><select className="search-select" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>{categoryList.map(cat => <option key={cat} value={cat}>{cat}</option>)}</select></div></div>
+                                <div className="flex-grow relative">
+                                    {mapView ? (
+                                        <MapComponent items={filteredItems} type={activeTab === 'gathering' ? 'communalPlace' : 'dayService'} center={initialCenter} zoom={initialZoom} onItemClick={handleItemClick}>
+                                            <div className="map-calendar-btn" onClick={openCalendar}><i className="fas fa-calendar-alt"></i></div>
+                                            <div className="view-toggle-container"><button onClick={() => setMapView(true)} className={`px-6 py-2 rounded-full text-xs font-bold transition ${mapView ? 'bg-rose-500 text-white' : 'bg-gray-100 text-gray-600'}`}>地図</button><button onClick={() => setMapView(false)} className={`px-6 py-2 rounded-full text-xs font-bold transition ${!mapView ? 'bg-rose-500 text-white' : 'bg-gray-100 text-gray-600'}`}>リスト</button></div>
+                                        </MapComponent>
+                                    ) : (
+                                        <div className="p-4 space-y-3 pb-20 overflow-y-auto h-full">
+                                            {filteredItems.length > 0 ? filteredItems.map((item, index) => (<div key={index} onClick={() => handleItemClick(item, activeTab === 'gathering' ? 'communalPlace' : 'dayService')} className="bg-white p-4 rounded-xl cursor-pointer border border-gray-100 shadow-sm flex justify-between items-center"><div><h3 className="font-bold text-gray-800">{item['名前'] || item['デイサービスセンター名']}</h3><p className="text-xs text-gray-500 mt-1"><i className="fas fa-map-marker-alt mr-1"></i>{item['住所']}</p></div><i className="fas fa-chevron-right text-gray-300"></i></div>)) : <div className="text-center text-gray-400 mt-10">該当データなし</div>}
+                                            <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-white p-1 rounded-full shadow-lg flex gap-1 z-50 border"><button onClick={() => setMapView(true)} className={`px-6 py-2 rounded-full text-xs font-bold transition ${mapView ? 'bg-rose-500 text-white' : 'bg-gray-100 text-gray-600'}`}>地図</button><button onClick={() => setMapView(false)} className={`px-6 py-2 rounded-full text-xs font-bold transition ${!mapView ? 'bg-rose-500 text-white' : 'bg-gray-100 text-gray-600'}`}>リスト</button></div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        ) : (
-                            <div className="p-4 garden-bg min-h-full flex flex-col items-center">
-                                <div className="sunshine"></div>
-                                <div className="bg-white/90 p-3 rounded-xl shadow mb-4 z-10 w-full max-w-xs text-center border-2 border-yellow-200">
-                                    <p className="text-xs font-bold text-gray-500">昨日の水やり実績</p>
-                                    <p className="text-xl font-bold text-gray-800"><span className="text-rose-500 text-2xl">{data.communityStats.yesterday||0}</span> 人</p>
+                        )}
+                        
+                        {activeTab === 'collection' && (
+                            <div className="p-4 space-y-6 pb-24 overflow-y-auto garden-bg">
+                                <div className="flex justify-end"><button onClick={()=>setShowCollectionHelp(true)} className="text-gray-500 hover:text-rose-500"><i className="fas fa-question-circle text-2xl"></i></button></div>
+                                <div className="bg-white p-6 rounded-3xl shadow-lg border border-rose-100 text-center relative overflow-hidden">
+                                    <div className="sunshine"></div>
+                                    <h2 className="text-xl font-bold text-gray-700 mb-6 flex items-center justify-center relative z-10"><i className="fas fa-seedling text-rose-500 mr-2"></i>バラメーター</h2>
+                                    
+                                    {/* 昨日の実績表示エリア */}
+                                    <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-3 mb-4 text-center shadow-sm relative z-10 mx-auto max-w-xs">
+                                        <p className="text-xs font-bold text-gray-500 mb-1"><i className="fas fa-sun text-orange-400 mr-1"></i>昨日の水やり実績</p>
+                                        <p className="text-xl font-extrabold text-gray-800">中央区で <span className="text-rose-500 text-2xl">{data.communityStats.yesterday || 0}</span> 人</p>
+                                        <p className="text-[10px] text-gray-400 mt-1">がバラにお水をあげました！</p>
+                                    </div>
+
+                                    <div className="flex flex-col items-center mb-8 relative z-10">
+                                        <div className="w-48 h-48 rounded-full border-8 border-white shadow-xl bg-gradient-to-tr from-sky-100 to-white flex items-center justify-center overflow-hidden mb-4 relative cursor-pointer" onClick={handleRoseClick}>
+                                            {getRoseImage() ? <img src={getRoseImage()} className="w-3/4 h-3/4 object-contain animate-float" referrerPolicy="no-referrer" onError={(e)=>{e.target.style.display='none'}} /> : null}
+                                        </div>
+                                        <div className="bg-white/90 px-6 py-2 rounded-xl shadow-sm border border-rose-100 mb-3"><p className="text-gray-800 font-bold text-lg">累計水やり {data.userData?.rosePoints || 0} 回</p></div>
+                                        <div className="w-full max-w-xs bg-gray-200 rounded-full h-4 mb-2 relative overflow-hidden border border-gray-300">
+                                            <div className="absolute top-0 left-0 h-full bg-blue-400 opacity-20 w-full animate-pulse"></div>
+                                            <div className="bg-gradient-to-r from-blue-400 to-blue-500 h-full rounded-full transition-all duration-1000 relative" style={{ width: `${Math.min(100, (data.userData?.rosePoints / (data.userData?.rosePoints + getRoseNextPoint())) * 100)}%` }}>
+                                                <div className="absolute top-0 right-0 h-full w-2 bg-white opacity-30"></div>
+                                            </div>
+                                        </div>
+                                        <p className="text-sm text-blue-600 font-bold">次の成長まで水やりをあと {getRoseNextPoint() > 0 ? getRoseNextPoint() : 0} 回</p>
+                                    </div>
+                                    <button onClick={handleWateringClick} className="w-full bg-gradient-to-r from-rose-500 to-pink-500 text-white font-bold py-6 px-6 rounded-2xl shadow-xl transition transform active:scale-95 flex items-center justify-center relative z-10">
+                                        <i className="fas fa-tint mr-3 text-2xl animate-bounce"></i><span className="text-xl">質問に答える（水やり）</span>
+                                    </button>
                                 </div>
-                                <div className="w-64 h-64 relative z-10 mb-4 cursor-pointer" onClick={()=>{setPreview(getRoseImg())}}>
-                                    <img src={getRoseImg()} className="w-full h-full object-contain animate-float" />
-                                </div>
-                                <div className="bg-white px-4 py-1 rounded-full shadow mb-6 z-10 font-bold text-gray-700">累計 {data.userData.rosePoints} 回</div>
-                                <button onClick={handleWater} className="w-full max-w-xs py-4 bg-gradient-to-r from-rose-500 to-pink-500 text-white font-bold rounded-2xl shadow-xl z-10 active:scale-95 transition"><i className="fas fa-tint mr-2"></i>水やり（質問）</button>
                             </div>
                         )}
                     </main>
 
-                    <footer className="footer-nav flex border-t pb-safe">
-                        <button onClick={()=>setTab('gathering')} className={`flex-1 flex flex-col items-center justify-center ${tab==='gathering'?'text-rose-500':'text-gray-400'}`}><i className="fas fa-handshake text-xl"></i><span className="text-[10px] font-bold">通いの場</span></button>
-                        <button onClick={()=>setTab('day')} className={`flex-1 flex flex-col items-center justify-center ${tab==='day'?'text-rose-500':'text-gray-400'}`}><i className="fas fa-house-chimney-medical text-xl"></i><span className="text-[10px] font-bold">デイ</span></button>
-                        <button onClick={()=>setTab('collection')} className={`flex-1 flex flex-col items-center justify-center ${tab==='collection'?'text-rose-500':'text-gray-400'}`}><i className="fas fa-seedling text-xl"></i><span className="text-[10px] font-bold">バラ</span></button>
+                    <footer className="footer-nav flex border-t border-gray-100 pb-safe">
+                        <button onClick={() => handleTabChange('gathering')} className={`flex-1 flex flex-col items-center justify-center transition py-1 ${activeTab === 'gathering' ? 'text-rose-500' : 'text-gray-400'}`}><i className="fas fa-handshake text-xl mb-1"></i><span className="text-[10px] font-bold">通いの場</span></button>
+                        <button onClick={() => handleTabChange('day')} className={`flex-1 flex flex-col items-center justify-center transition py-1 ${activeTab === 'day' ? 'text-rose-500' : 'text-gray-400'}`}><i className="fas fa-house-chimney-medical text-xl mb-1"></i><span className="text-[10px] font-bold">デイサービス</span></button>
+                        <button onClick={() => handleTabChange('collection')} className={`flex-1 flex flex-col items-center justify-center transition py-1 ${activeTab === 'collection' ? 'text-rose-500' : 'text-gray-400'}`}><i className="fas fa-seedling text-xl mb-1"></i><span className="text-[10px] font-bold">バラメーター</span></button>
                     </footer>
 
-                    {sel && <div className="modal-backdrop p-4" onClick={()=>setSel(null)}><div className="bg-white p-5 rounded-xl w-full max-w-sm max-h-[80vh] overflow-y-auto" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-xl mb-2">{sel['名前']||sel['デイサービスセンター名']}</h3><p className="whitespace-pre-wrap text-sm">{renderClickableText(sel['一言']||sel['住所'])}</p></div></div>}
-                    {qModal && <div className="modal-backdrop p-4" onClick={()=>setQModal(false)}><div className="bg-white p-6 rounded-xl w-full max-w-sm" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center mb-4">{dailyQ['質問']}</h3><div className="space-y-3">{dailyQ.options.map((o,i)=><button key={i} onClick={()=>handleAns(o)} className="w-full py-3 border-2 border-rose-100 rounded-lg hover:bg-rose-50 font-bold">{o.text}</button>)}</div></div></div>}
-                    {alert && <div className="fixed top-5 left-1/2 -translate-x-1/2 bg-rose-500 text-white px-6 py-3 rounded-full shadow-xl font-bold z-[11000]">{alert}</div>}
-                    {preview && <div className="modal-backdrop" onClick={()=>setPreview(null)}><img src={preview} className="max-w-[90%] max-h-[80%] object-contain bg-white rounded-xl" /></div>}
+                    {/* インストール誘導バナー */}
+                    {showInstallBanner && <InstallBanner onClose={() => setShowInstallBanner(false)} />}
+
+                    {showWelcome && <WelcomeModal onClose={() => { setShowWelcome(false); setShowAuthModal(true); }} />}
+                    {showAuthModal && <AuthModal currentUserId={localStorage.getItem('yono_map_user_id')} onClose={()=>setShowAuthModal(false)} onLoginSuccess={handleLoginSuccess} />}
+                    {selectedItem && <DetailModal item={selectedItem} type={selectedItemType} headers={selectedItemType==='communalPlace' ? data.communalPlacesHeaders : data.dayServiceHeaders} onClose={() => setSelectedItem(null)} />}
+                    {showNewsModal && <NewsModal news={data.news || []} onClose={handleNewsClose} />}
+                    {showAboutModal && <AboutModal about={data.about || {}} onClose={() => setShowAboutModal(false)} />}
+                    {showQuestion && <QuestionModal question={dailyQuestion} onAnswer={handleAnswer} onClose={() => setShowQuestion(false)} />}
+                    {showCollectionHelp && <CollectionHelpModal onClose={() => setShowCollectionHelp(false)} />}
+                    {alertState && <CustomAlert message={alertState.message} type={alertState.type} onClose={() => setAlertState(null)} />}
                     
-                    <InstallPrompt />
+                    {previewImage && (
+                        <div className="modal-backdrop p-4" onClick={() => setPreviewImage(null)}>
+                            <div className="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden flex flex-col items-center shadow-2xl p-4" onClick={e => e.stopPropagation()}>
+                                <div className="w-full h-[60vh] flex items-center justify-center bg-gray-50 rounded-xl mb-4 relative">
+                                    <img src={previewImage.url} className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" />
+                                </div>
+                                {previewImage.message && (<div className="bg-rose-50 p-4 rounded-xl border border-rose-100 w-full mb-2"><p className="text-rose-600 font-bold text-lg text-center leading-relaxed whitespace-pre-wrap">{previewImage.message}</p></div>)}
+                                <button onClick={() => setPreviewImage(null)} className="absolute top-2 right-2 bg-black/20 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg font-bold text-xl"><i className="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
