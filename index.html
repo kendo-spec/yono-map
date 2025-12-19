@@ -2,15 +2,20 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <!-- アプリっぽく見せる設定 -->
+    <!-- アプリっぽく見せる設定（ズーム抑制・全画面・セーフエリア対応） -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#F8355C">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
     <title>与野支え合いマップ</title>
     
-    <!-- PWA用アイコン設定 -->
+    <!-- PWA用マニフェスト読み込み -->
     <link rel="manifest" href="./manifest.json">
+
+    <!-- ★★★ ファビコン・アプリアイコン設定 ★★★ -->
+    <!-- Googleドライブの画像を使う場合は https://drive.google.com/uc?export=view&id=ファイルID の形式にしてください -->
+    <link rel="icon" href="https://placehold.co/64x64/F8355C/ffffff/png?text=YONO">
     <link rel="apple-touch-icon" href="https://placehold.co/192x192/F8355C/ffffff/png?text=YONO">
     
     <!-- Google Analytics 4 -->
@@ -70,10 +75,13 @@
         .footer-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; z-index: 1000; background-color: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); padding-bottom: env(safe-area-inset-bottom); }
         .leaflet-container { height: 100%; width: 100%; z-index: 1; background: #f3f4f6; }
         .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .confetti-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10000; }
         .leaflet-popup-content-wrapper { border-radius: 16px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
         .leaflet-popup-content { margin: 0; width: 240px !important; }
+        .leaflet-popup-tip { background: white; }
         .custom-popup-header { background: linear-gradient(135deg, #F8355C 0%, #fb7185 100%); color: white; padding: 8px 12px; font-weight: bold; font-size: 0.9rem; }
         .custom-popup-body { padding: 12px; text-align: center; }
+        img { transition: opacity 0.3s; }
         
         /* Map Buttons */
         .map-calendar-btn { position: absolute; top: 12px; right: 12px; z-index: 1000; background-color: white; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); color: #F8355C; font-size: 20px; cursor: pointer; border: 2px solid #F8355C; }
@@ -90,6 +98,7 @@
         .text-size-large { font-size: 1.2rem !important; }
         .text-size-large .text-xs { font-size: 0.9rem !important; }
         .text-size-large .text-sm { font-size: 1.05rem !important; }
+        .text-size-large .text-lg { font-size: 1.4rem !important; }
         .text-size-large .text-xl { font-size: 1.6rem !important; }
         .text-size-large .text-2xl { font-size: 1.8rem !important; }
         
@@ -101,7 +110,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // ★★★重要：ここにGASの新しいURL（個人アカウント版）を貼り付けてください★★★
+        // ★ユーザー指定のGAS API URL
         const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyE81D55A-VSCR8r-73bZ7Zd3t05fNcapbgG6_SofZ6h1M54OX3hlNYNLpNtXlL2f3m/exec";
 
         const { useState, useEffect, useCallback, useMemo, useRef } = React;
@@ -133,6 +142,7 @@
         };
 
         // --- PWA用の通信関数 (fetchを使用) ---
+        // 以前のgoogle.script.runを置き換え
         const runGAS = async (functionName, args = {}) => {
             const params = new URLSearchParams({ action: functionName, ...args });
             try {
@@ -141,11 +151,13 @@
                 return json;
             } catch (e) {
                 console.error("API Error:", e);
-                // エラー時のダミーデータ（アプリが真っ白になるのを防ぐ）
+                // エラー時のダミーデータ
                 return { 
                     communalPlaces: [], dayService: [], news: [], 
                     about: {'タイトル':'読込エラー', '総アクセス数':0}, 
-                    userData: {}, masterData: [], questionMaster: [], collection: [] 
+                    userData: {}, masterData: [], questionMaster: [], collection: [],
+                    communityStats: { quiz: 0, scan: 0, yesterday: 0 },
+                    witherDays: 14
                 };
             }
         };
@@ -198,9 +210,13 @@
             }, [item, type]);
             if (!item) return null;
             let title = type === 'communalPlace' ? (item['名前'] || '名称不明') : (item['デイサービスセンター名'] || '名称不明');
-            let images = [item['画像1'], item['画像2']].filter(url => url && url.startsWith('http'));
+            let images = [];
+            if(item['画像1']) images.push(item['画像1']);
+            if(item['画像2']) images.push(item['画像2']);
+            images = images.filter(url => url && url.startsWith('http'));
             const headerImage = images.length > 0 ? formatImageUrl(images[0]) : null;
             const hitokoto = item['一言'] || item['事業所の強み、PRポイント'];
+            const hitokotoLabel = type === 'communalPlace' ? 'ひとこと' : '事業所の強み、PRポイント';
             const displayOrder = type === 'communalPlace' ? ['場所', '日時', '人数', '対象', '内容', '費用', 'ウェブサイト', '問い合わせ', 'メール', '問い合わせ2', '種別'] : ['サービス提供時間', '定休日', '定員', '備考', 'Facebook'];
 
             return (
@@ -213,7 +229,7 @@
                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-5"><span className="inline-block bg-rose-500 text-white text-xs px-2 py-1 rounded mb-2 shadow-sm border border-rose-400">{item['カテゴリー'] || (type === 'dayService' ? 'デイサービス' : '通いの場')}</span><h2 className="text-2xl font-bold text-white drop-shadow-md leading-tight">{title}</h2></div>
                         </div>
                         <div className="p-5 overflow-y-auto flex-1 space-y-4">
-                            {hitokoto && <div className="bg-rose-50 p-4 rounded-xl border-l-4 border-rose-400 shadow-sm"><h3 className="font-bold text-rose-600 text-sm mb-1"><i className="fas fa-comment-dots mr-1"></i>ひとこと</h3><p className="text-gray-800 font-bold leading-relaxed">{renderClickableText(hitokoto)}</p></div>}
+                            {hitokoto && <div className="bg-rose-50 p-4 rounded-xl border-l-4 border-rose-400 shadow-sm"><h3 className="font-bold text-rose-600 text-sm mb-1"><i className="fas fa-comment-dots mr-1"></i>{hitokotoLabel}</h3><p className="text-gray-800 font-bold leading-relaxed">{renderClickableText(hitokoto)}</p></div>}
                             {displayOrder.map((key, i) => item[key] && (
                                 <div key={i} className="flex flex-col border-b border-gray-100 py-2">
                                     <span className="font-bold text-gray-500 text-xs mb-1">{key}</span>
@@ -228,6 +244,7 @@
         };
 
         const ManualModal = ({ imageUrls, onClose }) => {
+            useEffect(() => { sendGAEvent('view_manual', {}); }, []);
             if (!imageUrls || imageUrls.length === 0) return null;
             return (
                 <div className="modal-backdrop z-[12000] p-0" onClick={onClose}>
@@ -245,8 +262,10 @@
             const [showManual, setShowManual] = useState(false);
             useEffect(() => {
                 if (qrCodeRef.current && about['共有']) {
-                    try { qrCodeRef.current.innerHTML = ''; new QRCode(qrCodeRef.current, { text: about['共有'], width: 120, height: 120, correctLevel: QRCode.CorrectLevel.L }); } catch(e) {}
+                    if(about['共有'].match(/\.(jpeg|jpg|gif|png)$/) != null || about['共有'].includes('imgur')){ qrCodeRef.current.innerHTML = `<img src="${formatImageUrl(about['共有'])}" class="w-full h-full object-contain" referrerPolicy="no-referrer" />`; } 
+                    else { try { qrCodeRef.current.innerHTML = ''; new QRCode(qrCodeRef.current, { text: about['共有'], width: 120, height: 120, correctLevel: QRCode.CorrectLevel.L }); } catch(e) {} }
                 }
+                sendGAEvent('view_about', {});
             }, [about]);
             const handleCopyLink = () => { navigator.clipboard.writeText(about['リンクコピー'] || window.location.href).then(() => alert('リンクをコピーしました！')); };
             const manualImages = useMemo(() => { if (!about['説明書']) return []; return about['説明書'].split(',').filter(url => url.trim().length > 0); }, [about]);
@@ -497,9 +516,9 @@
                             localStorage.setItem('yono_map_user_id', userId);
                             setShowWelcome(true);
                         }
-                        runGAS('incrementAccessCount');
                         const result = await runGAS('getAllData', { userId });
                         setData(result);
+                        runGAS('incrementAccessCount');
                     } catch (error) {
                         console.error(error);
                         setData({ communalPlaces: [], dayService: [], news: [], about: {'総アクセス数':0}, userData: {}, masterData: [], questionMaster: [], collection: [] });
