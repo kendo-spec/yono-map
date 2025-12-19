@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#F8355C">
+    <title>与野支え合いマップ</title>
+    
+    <!-- PWA用設定 -->
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/F8355C/ffffff/png?text=YONO">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SJ46G7DPJG"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-SJ46G7DPJG', { 'cookie_flags': 'max-age=7200;secure;samesite=none' });
+    </script>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <script>
+        // PWA Service Worker登録
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').then(() => console.log('SW Registered'));
+        }
+        
+        tailwind.config = { theme: { extend: { colors: { rose: { 500: '#F8355C', 600: '#D61C44' }, sky: { 100: '#E0F2FE' }, grass: { 100: '#DCFCE7' } }, animation: { 'float': 'float 3s ease-in-out infinite' }, keyframes: { float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } } } } } }
+    </script>
+    <style>
+        body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: #f9fafb; }
+        #root { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; font-family: "Helvetica Neue", Arial, sans-serif; }
+        .main-content { flex-grow: 1; overflow-y: auto; padding-bottom: 80px; display: flex; flex-direction: column; -webkit-overflow-scrolling: touch; }
+        .footer-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; z-index: 1000; background-color: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); padding-bottom: env(safe-area-inset-bottom); }
+        .leaflet-container { height: 100%; width: 100%; z-index: 1; }
+        .modal-backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .garden-bg { background: linear-gradient(180deg, #E0F2FE 0%, #FFFFFF 60%, #DCFCE7 100%); }
+        .sunshine { position: absolute; width: 300px; height: 300px; background: radial-gradient(circle, rgba(255,255,200,0.6) 0%, rgba(255,255,255,0) 70%); top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 0; pointer-events: none; }
+        .text-size-large { font-size: 1.2rem !important; }
+        .text-size-large .text-xs { font-size: 0.9rem !important; }
+        .text-size-large .text-sm { font-size: 1.05rem !important; }
+        .text-size-large .text-xl { font-size: 1.6rem !important; }
+        .text-size-large .text-2xl { font-size: 1.8rem !important; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // ★重要：ここにGASのウェブアプリURLを貼り付けてください
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzg93A2S5tZizeyHf2f72dnomGJh7I_K_j91SAx4atbqJSrF2mIkb9e7h2GrNSMbc54/exec";
+
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- API通信用関数 (fetchを使用) ---
+        const runGAS = async (functionName, args = {}) => {
+            const params = new URLSearchParams({ action: functionName, ...args });
+            try {
+                const response = await fetch(`${GAS_API_URL}?${params}`);
+                const data = await response.json();
+                return data;
+            } catch (e) {
+                console.error("API Error", e);
+                return { success: false, message: "通信エラー" };
+            }
+        };
+
+        const sendGAEvent = (eventName, params) => { if (typeof window.gtag === 'function') window.gtag('event', eventName, params); };
+        const formatImageUrl = (url) => { if (!url) return null; if (url.includes('drive.google.com')) { const idMatch = url.match(/\/d\/([-_\w]+)/) || url.match(/id=([-_\w]+)/); if (idMatch) return `https://drive.google.com/uc?export=view&id=${idMatch[1]}`; } return url; };
+        const renderClickableText = (text) => { if (!text) return ''; return String(text).split(/(\d{2,4}-\d{2,4}-\d{3,4}|\d{10,11})/).map((part, i) => part.match(/\d{2,4}-\d{2,4}-\d{3,4}|\d{10,11}/) ? <a key={i} href={"tel:"+part} className="text-rose-500 underline font-bold" onClick={(e)=>e.stopPropagation()}>{part}</a> : part); };
+
+        const Loading = () => ( <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-gray-500"><i className="fas fa-spinner fa-spin text-4xl text-rose-500 mb-3"></i><p className="font-semibold">読み込み中...</p></div> );
+        
+        // --- Components ---
+        const InstallPrompt = () => {
+            const [show, setShow] = useState(false);
+            useEffect(() => {
+                const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
+                const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+                if (isIos && !isStandalone) setTimeout(() => setShow(true), 2000);
+            }, []);
+            if (!show) return null;
+            return (
+                <div className="fixed bottom-[80px] left-4 right-4 bg-gray-900/90 text-white p-4 rounded-xl shadow-2xl z-[9999] animate-bounce">
+                    <div className="flex justify-between"><h3 className="font-bold text-sm">アプリとして使えます</h3><button onClick={()=>setShow(false)}><i className="fas fa-times"></i></button></div>
+                    <p className="text-xs mt-1">画面下の <i className="fas fa-share-square mx-1"></i> から「ホーム画面に追加」を押してください。</p>
+                </div>
+            );
+        };
+
+        const MapComponent = ({ items, type, center, onItemClick, children }) => {
+            const mapRef = useRef(null);
+            const layerRef = useRef(null);
+            useEffect(() => { window.handleDetail = (i, t) => onItemClick(items[i], t); }, [items]);
+            useEffect(() => {
+                if(!mapRef.current) {
+                    const map = L.map('map-container').setView(center, 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                    mapRef.current = map;
+                    layerRef.current = L.featureGroup().addTo(map);
+                }
+                const layer = layerRef.current;
+                layer.clearLayers();
+                items.forEach((item, i) => {
+                    const ll = item['緯度経度'] ? item['緯度経度'].split(',').map(Number) : null;
+                    if(ll) L.marker(ll).bindPopup(`<b>${item['名前']||item['デイサービスセンター名']}</b><br><button onclick="window.handleDetail(${i},'${type}')" style="color:blue">詳細</button>`).addTo(layer);
+                });
+            }, [items, type]);
+            return <div className="relative w-full h-full"><div id="map-container" className="w-full h-full"></div>{children}</div>;
+        };
+
+        // --- Main App ---
+        const App = () => {
+            const [data, setData] = useState(null);
+            const [tab, setTab] = useState('gathering');
+            const [view, setView] = useState('map');
+            const [sel, setSel] = useState(null);
+            const [alert, setAlert] = useState(null);
+            const [lgText, setLgText] = useState(false);
+            const [qModal, setQModal] = useState(false);
+            const [preview, setPreview] = useState(null);
+            const [dailyQ, setDailyQ] = useState(null);
+
+            useEffect(() => { if(lgText) document.body.classList.add('text-size-large'); else document.body.classList.remove('text-size-large'); }, [lgText]);
+
+            useEffect(() => {
+                const init = async () => {
+                    let uid = localStorage.getItem('yono_uid');
+                    if(!uid) { uid = crypto.randomUUID(); localStorage.setItem('yono_uid', uid); }
+                    const res = await runGAS('getAllData', { userId: uid });
+                    if(!res.error) setData(res);
+                };
+                init();
+            }, []);
+
+            const handleWater = () => {
+                const now = new Date();
+                if (localStorage.getItem('last_quiz') === now.toDateString()) { setAlert('本日は回答済みです'); return; }
+                if(now.getHours() < 17) { setAlert('質問は17時からです'); return; }
+                const qs = data.questionMaster || [];
+                if(qs.length > 0) { setDailyQ(qs[Math.floor(Math.random()*qs.length)]); setQModal(true); }
+            };
+
+            const handleAns = async (opt) => {
+                setQModal(false);
+                const pt = parseInt(opt.pt);
+                setAlert(pt > 0 ? `水を${pt}回あげました！` : 'また明日！');
+                if(pt > 0) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                await runGAS('addQuizPoints', { userId: localStorage.getItem('yono_uid'), points: pt });
+                localStorage.setItem('last_quiz', new Date().toDateString());
+                const res = await runGAS('getAllData', { userId: localStorage.getItem('yono_uid') });
+                setData(res);
+            };
+
+            const getRoseImg = () => {
+                if(!data || !data.masterData) return null;
+                const pt = data.userData.rosePoints || 0;
+                const lvls = data.masterData.filter(m => !isNaN(parseInt(m['必要累積ポイント']))).sort((a,b)=>a['必要累積ポイント']-b['必要累積ポイント']);
+                let img = lvls[0]?.['画像URL'];
+                lvls.forEach(l => { if(pt >= l['必要累積ポイント']) img = l['画像URL']; });
+                
+                // 枯れ判定
+                const last = data.userData.lastActivity;
+                if(last && (new Date().getTime() - last) > (data.witherDays * 86400000)) {
+                   const dead = data.masterData.find(m => m['成長段階'] === '枯れた状態');
+                   if(pt >= 80 && dead) return formatImageUrl(dead['画像URL']);
+                   if(pt < 80) return formatImageUrl(lvls[0]?.['画像URL']); // リセット風
+                }
+                return formatImageUrl(img);
+            };
+
+            if (!data) return <div className="h-screen flex items-center justify-center"><Loading /></div>;
+
+            const items = tab === 'gathering' ? data.communalPlaces : (tab === 'day' ? data.dayService : []);
+            const type = tab === 'gathering' ? 'communalPlace' : 'dayService';
+
+            return (
+                <div className="flex flex-col h-full">
+                    <header className="flex justify-between items-center px-4 py-3 bg-white border-b z-50 sticky top-0 shadow-sm">
+                        <h1 className="text-lg font-extrabold text-rose-500"><i className="fas fa-map-marked-alt mr-2"></i>与野支え合いマップ</h1>
+                        <button onClick={()=>setLgText(!lgText)} className="border px-2 py-1 rounded text-xs font-bold">あ/亜</button>
+                    </header>
+
+                    <main className="main-content bg-gray-50 relative">
+                        {tab !== 'collection' ? (
+                            view === 'map' ? 
+                            <MapComponent items={items} type={type} center={[35.8797, 139.6247]} onItemClick={(i,t)=>{setSel(i);}}>
+                                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white p-1 rounded-full shadow-lg z-[1000] flex"><button onClick={()=>setView('map')} className="px-4 py-1 bg-rose-500 text-white rounded-full text-sm font-bold">地図</button><button onClick={()=>setView('list')} className="px-4 py-1 text-gray-500 text-sm font-bold">リスト</button></div>
+                            </MapComponent> :
+                            <div className="p-4 space-y-3">
+                                {items.map((it, i) => <div key={i} onClick={()=>{setSel(it)}} className="bg-white p-4 rounded shadow-sm border">{it['名前']||it['デイサービスセンター名']}</div>)}
+                                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-white p-1 rounded-full shadow-lg z-50 flex border"><button onClick={()=>setView('map')} className="px-4 py-1 text-gray-500 rounded-full text-sm font-bold">地図</button><button onClick={()=>setView('list')} className="px-4 py-1 bg-rose-500 text-white text-sm font-bold">リスト</button></div>
+                            </div>
+                        ) : (
+                            <div className="p-4 garden-bg min-h-full flex flex-col items-center">
+                                <div className="sunshine"></div>
+                                <div className="bg-white/90 p-3 rounded-xl shadow mb-4 z-10 w-full max-w-xs text-center border-2 border-yellow-200">
+                                    <p className="text-xs font-bold text-gray-500">昨日の水やり実績</p>
+                                    <p className="text-xl font-bold text-gray-800"><span className="text-rose-500 text-2xl">{data.communityStats.yesterday||0}</span> 人</p>
+                                </div>
+                                <div className="w-64 h-64 relative z-10 mb-4 cursor-pointer" onClick={()=>{setPreview(getRoseImg())}}>
+                                    <img src={getRoseImg()} className="w-full h-full object-contain animate-float" />
+                                </div>
+                                <div className="bg-white px-4 py-1 rounded-full shadow mb-6 z-10 font-bold text-gray-700">累計 {data.userData.rosePoints} 回</div>
+                                <button onClick={handleWater} className="w-full max-w-xs py-4 bg-gradient-to-r from-rose-500 to-pink-500 text-white font-bold rounded-2xl shadow-xl z-10 active:scale-95 transition"><i className="fas fa-tint mr-2"></i>水やり（質問）</button>
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="footer-nav flex border-t pb-safe">
+                        <button onClick={()=>setTab('gathering')} className={`flex-1 flex flex-col items-center justify-center ${tab==='gathering'?'text-rose-500':'text-gray-400'}`}><i className="fas fa-handshake text-xl"></i><span className="text-[10px] font-bold">通いの場</span></button>
+                        <button onClick={()=>setTab('day')} className={`flex-1 flex flex-col items-center justify-center ${tab==='day'?'text-rose-500':'text-gray-400'}`}><i className="fas fa-house-chimney-medical text-xl"></i><span className="text-[10px] font-bold">デイ</span></button>
+                        <button onClick={()=>setTab('collection')} className={`flex-1 flex flex-col items-center justify-center ${tab==='collection'?'text-rose-500':'text-gray-400'}`}><i className="fas fa-seedling text-xl"></i><span className="text-[10px] font-bold">バラ</span></button>
+                    </footer>
+
+                    {sel && <div className="modal-backdrop p-4" onClick={()=>setSel(null)}><div className="bg-white p-5 rounded-xl w-full max-w-sm max-h-[80vh] overflow-y-auto" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-xl mb-2">{sel['名前']||sel['デイサービスセンター名']}</h3><p className="whitespace-pre-wrap text-sm">{renderClickableText(sel['一言']||sel['住所'])}</p></div></div>}
+                    {qModal && <div className="modal-backdrop p-4" onClick={()=>setQModal(false)}><div className="bg-white p-6 rounded-xl w-full max-w-sm" onClick={e=>e.stopPropagation()}><h3 className="font-bold text-center mb-4">{dailyQ['質問']}</h3><div className="space-y-3">{dailyQ.options.map((o,i)=><button key={i} onClick={()=>handleAns(o)} className="w-full py-3 border-2 border-rose-100 rounded-lg hover:bg-rose-50 font-bold">{o.text}</button>)}</div></div></div>}
+                    {alert && <div className="fixed top-5 left-1/2 -translate-x-1/2 bg-rose-500 text-white px-6 py-3 rounded-full shadow-xl font-bold z-[11000]">{alert}</div>}
+                    {preview && <div className="modal-backdrop" onClick={()=>setPreview(null)}><img src={preview} className="max-w-[90%] max-h-[80%] object-contain bg-white rounded-xl" /></div>}
+                    
+                    <InstallPrompt />
+                </div>
+            );
+        };
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
