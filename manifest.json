@@ -1,6 +1,6 @@
 {
   "name": "与野支え合いマップ",
-  "short_name": "与野マップ",
+  "short_name": "与野支え合いマップ",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
